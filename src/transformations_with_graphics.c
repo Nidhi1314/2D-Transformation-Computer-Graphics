@@ -2,7 +2,7 @@
 #include <math.h>
 #include <stdio.h>
 
-// Add prototype to avoid implicit declaration warning
+
 void closegraph(void);
 #include <graphics.h>
 #include <math.h>
@@ -37,7 +37,7 @@ int main() {
     printf("\n1. Translation\n2. Scaling\n3. Rotation\n4. Reflection\n5. Shearing\nEnter choice: ");
     scanf("%d", &choice);
 
-    // Copy original points for transformation
+    
     for (i = 0; i < 3; i++) {
         tx_x[i] = x[i];
         tx_y[i] = y[i];
@@ -104,7 +104,7 @@ int main() {
     setcolor(14); // YELLOW
     draw_triangle(tx_x, tx_y);
 
-    // Add legend
+    
     setcolor(15); // WHITE
     outtextxy(10, 10, "Original Triangle (White)");
     setcolor(14); // YELLOW
