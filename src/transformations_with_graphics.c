@@ -1,116 +1,162 @@
-#include <graphics.h>
-#include <math.h>
-#include <stdio.h>
+// 2D Transformations Visualizer using SFML (basic formulas, no matrices)
+// Compile: g++ main.cpp -o transforms -std=c++17 -lsfml-graphics -lsfml-window -lsfml-system
 
+#include <SFML/Graphics.hpp>
+#include <iostream>
+#include <vector>
+#define _USE_MATH_DEFINES
+#include <cmath>
+#include <algorithm>
+using namespace std;
 
-void closegraph(void);
-#include <graphics.h>
-#include <math.h>
-#include <stdio.h>
+struct Point {
+    float x, y;
+};
 
-void draw_triangle(int x[3], int y[3]) {
-    line(x[0], y[0], x[1], y[1]);
-    line(x[1], y[1], x[2], y[2]);
-    line(x[2], y[2], x[0], y[0]);
+struct Viewport {
+    float scale = 1.f;
+    Point worldCenter{0.f, 0.f};
+    int width = 800, height = 600;
+};
+
+Viewport computeViewport(const vector<Point>& A, const vector<Point>& B, int W, int H) {
+    float xmin = 1e9, xmax = -1e9, ymin = 1e9, ymax = -1e9;
+    auto mix = [&](const vector<Point>& V) {
+        for (auto& p : V) {
+            xmin = min(xmin, p.x);
+            xmax = max(xmax, p.x);
+            ymin = min(ymin, p.y);
+            ymax = max(ymax, p.y);
+        }
+    };
+    mix(A); mix(B);
+
+    float w = max(1e-3f, xmax - xmin);
+    float h = max(1e-3f, ymax - ymin);
+    float scale = 0.8f * min(W / w, H / h);
+
+    Viewport vp;
+    vp.scale = scale;
+    vp.worldCenter = {(xmin + xmax) * 0.5f, (ymin + ymax) * 0.5f};
+    vp.width = W; vp.height = H;
+    return vp;
+}
+
+sf::Vector2f toScreen(const Point& world, const Viewport& vp) {
+    float sx = (world.x - vp.worldCenter.x) * vp.scale + vp.width * 0.5f;
+    float sy = vp.height * 0.5f - (world.y - vp.worldCenter.y) * vp.scale;
+    return {sx, sy};
+}
+
+// ---- Transformation functions ----
+vector<Point> translate(const vector<Point>& tri, float tx, float ty) {
+    vector<Point> res;
+    for (auto p : tri) res.push_back({p.x + tx, p.y + ty});
+    return res;
+}
+
+vector<Point> scale(const vector<Point>& tri, float sx, float sy) {
+    vector<Point> res;
+    for (auto p : tri) res.push_back({p.x * sx, p.y * sy});
+    return res;
+}
+
+vector<Point> rotate(const vector<Point>& tri, float deg) {
+    float rad = deg * M_PI / 180.0;
+    float c = cos(rad), s = sin(rad);
+    vector<Point> res;
+    for (auto p : tri) {
+        float x = p.x * c - p.y * s;
+        float y = p.x * s + p.y * c;
+        res.push_back({x, y});
+    }
+    return res;
+}
+
+vector<Point> reflect(const vector<Point>& tri, int type) {
+    vector<Point> res;
+    for (auto p : tri) {
+        if (type == 1) res.push_back({p.x, -p.y});        // X-axis
+        else if (type == 2) res.push_back({-p.x, p.y});   // Y-axis
+        else if (type == 3) res.push_back({-p.x, -p.y});  // Origin
+        else if (type == 4) res.push_back({p.y, p.x});    // y = x
+        else if (type == 5) res.push_back({-p.y, -p.x});  // y = -x
+    }
+    return res;
+}
+
+vector<Point> shear(const vector<Point>& tri, float shx, float shy) {
+    vector<Point> res;
+    for (auto p : tri) {
+        float x = p.x + shx * p.y;
+        float y = p.y + shy * p.x;
+        res.push_back({x, y});
+    }
+    return res;
 }
 
 int main() {
-    int gd = DETECT, gm;
-    int x[3], y[3], tx_x[3], tx_y[3];
-    int i, choice;
-    float tx, ty, sx, sy, angle, shx, shy;
-    initgraph(&gd, &gm, "");
-
-    // Input triangle coordinates
-    printf("Enter coordinates of triangle:\n");
-    for (i = 0; i < 3; i++) {
-        printf("x%d y%d: ", i+1, i+1);
-        scanf("%d %d", &x[i], &y[i]);
-        tx_x[i] = x[i];
-        tx_y[i] = y[i];
+    cout << "Enter triangle coordinates (x y) for 3 points:\n";
+    vector<Point> tri(3);
+    for (int i = 0; i < 3; i++) {
+        cout << "P" << i+1 << ": ";
+        cin >> tri[i].x >> tri[i].y;
     }
 
-    cleardevice();
-    setcolor(15); // WHITE
-    draw_triangle(x, y); // Draw original triangle
+    cout << "\nChoose transformation:\n"
+         << "1. Translation\n2. Scaling\n3. Rotation\n4. Reflection\n5. Shearing\n> ";
+    int choice; cin >> choice;
 
-    printf("\n1. Translation\n2. Scaling\n3. Rotation\n4. Reflection\n5. Shearing\nEnter choice: ");
-    scanf("%d", &choice);
-
-    
-    for (i = 0; i < 3; i++) {
-        tx_x[i] = x[i];
-        tx_y[i] = y[i];
+    vector<Point> tri2;
+    if (choice == 1) {
+        float tx, ty; cout << "tx ty: "; cin >> tx >> ty;
+        tri2 = translate(tri, tx, ty);
+    } else if (choice == 2) {
+        float sx, sy; cout << "sx sy: "; cin >> sx >> sy;
+        tri2 = scale(tri, sx, sy);
+    } else if (choice == 3) {
+        float ang; cout << "angle (deg): "; cin >> ang;
+        tri2 = rotate(tri, ang);
+    } else if (choice == 4) {
+        cout << "Reflect across: 1.X-axis 2.Y-axis 3.Origin 4.y=x 5.y=-x : ";
+        int r; cin >> r;
+        tri2 = reflect(tri, r);
+    } else if (choice == 5) {
+        float shx, shy; cout << "shx shy: "; cin >> shx >> shy;
+        tri2 = shear(tri, shx, shy);
+    } else {
+        cout << "Invalid choice.\n"; return 0;
     }
 
-    switch (choice) {
-        case 1: // Translation
-            printf("Enter tx and ty: ");
-            scanf("%f %f", &tx, &ty);
-            for (i = 0; i < 3; i++) {
-                tx_x[i] = x[i] + tx;
-                tx_y[i] = y[i] + ty;
-            }
-            break;
+    const int W = 900, H = 700;
+    sf::RenderWindow window(sf::VideoMode(W, H), "2D Transformations (Original: White, Transformed: Yellow)");
+    window.setFramerateLimit(60);
 
-        case 2: // Scaling
-            printf("Enter sx and sy: ");
-            scanf("%f %f", &sx, &sy);
-            for (i = 0; i < 3; i++) {
-                tx_x[i] = x[i] * sx;
-                tx_y[i] = y[i] * sy;
-            }
-            break;
+    Viewport vp = computeViewport(tri, tri2, W, H);
 
-        case 3: // Rotation (about origin)
-            printf("Enter angle in degrees: ");
-            scanf("%f", &angle);
-            angle = angle * 3.14159 / 180;
-            for (i = 0; i < 3; i++) {
-                tx_x[i] = (int)(x[i] * cos(angle) - y[i] * sin(angle));
-                tx_y[i] = (int)(x[i] * sin(angle) + y[i] * cos(angle));
-            }
-            break;
+    auto makeShape = [&](const vector<Point>& pts, sf::Color outline) {
+        sf::ConvexShape s; s.setPointCount(3);
+        for (int i = 0; i < 3; i++) s.setPoint(i, toScreen(pts[i], vp));
+        s.setFillColor(sf::Color(0,0,0,0));
+        s.setOutlineColor(outline);
+        s.setOutlineThickness(2.f);
+        return s;
+    };
 
-        case 4: // Reflection
-            printf("1.X-axis 2.Y-axis 3.Origin 4.y=x 5.y=-x\nEnter choice: ");
-            scanf("%d", &i);
-            for (int j = 0; j < 3; j++) {
-                int tempX = x[j], tempY = y[j];
-                if (i == 1) { tx_x[j] = tempX; tx_y[j] = -tempY; }
-                else if (i == 2) { tx_x[j] = -tempX; tx_y[j] = tempY; }
-                else if (i == 3) { tx_x[j] = -tempX; tx_y[j] = -tempY; }
-                else if (i == 4) { tx_x[j] = tempY; tx_y[j] = tempX; }
-                else if (i == 5) { tx_x[j] = -tempY; tx_y[j] = -tempX; }
-            }
-            break;
+    sf::ConvexShape original = makeShape(tri, sf::Color::White);
+    sf::ConvexShape transformed = makeShape(tri2, sf::Color::Yellow);
 
-        case 5: // Shearing
-            printf("Enter shx and shy: ");
-            scanf("%f %f", &shx, &shy);
-            for (i = 0; i < 3; i++) {
-                tx_x[i] = x[i] + shx * y[i];
-                tx_y[i] = y[i] + shy * x[i];
-            }
-            break;
-        default:
-            printf("Invalid choice!\n");
-            getch();
-            closegraph();
-            return 1;
+    cout << "\nLegend: Original = White, Transformed = Yellow\nClose the window to exit.\n";
+
+    while (window.isOpen()) {
+        sf::Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed) window.close();
+        }
+        window.clear(sf::Color(20, 24, 31));
+        window.draw(original);
+        window.draw(transformed);
+        window.display();
     }
-
-    // Draw transformed triangle
-    setcolor(14); // YELLOW
-    draw_triangle(tx_x, tx_y);
-
-    
-    setcolor(15); // WHITE
-    outtextxy(10, 10, "Original Triangle (White)");
-    setcolor(14); // YELLOW
-    outtextxy(10, 30, "Transformed Triangle (Yellow)");
-
-    getch();
-    closegraph();
     return 0;
 }
